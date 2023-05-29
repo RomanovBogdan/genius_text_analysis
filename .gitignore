@@ -4,3 +4,5 @@ lyrics_data.csv
 sample_links.csv
 .idea
 .gitignore
+song_info_log.txt
+song_lyrics_log.txt
