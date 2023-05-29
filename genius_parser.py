@@ -8,6 +8,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from urllib.parse import urlparse
+import logging
 
 
 class GeniusScraper:
@@ -16,6 +17,20 @@ class GeniusScraper:
         self.end_date = end_date
         self.links = []
         self.session = self.setting_connection()
+
+        self.song_info_logger = logging.getLogger('song_info_logger')
+        self.song_info_logger.setLevel(logging.DEBUG)
+        handler = logging.FileHandler('song_info_log.txt', 'w')
+        formatter = logging.Formatter('%(asctime)s - %(message)s')
+        handler.setFormatter(formatter)
+        self.song_info_logger.addHandler(handler)
+
+        # Set up logger for parsing
+        self.lyrics_logger = logging.getLogger('lyrics_logger')
+        self.lyrics_logger.setLevel(logging.DEBUG)
+        handler = logging.FileHandler('song_lyrics_log.txt', 'w')
+        handler.setFormatter(formatter)
+        self.lyrics_logger.addHandler(handler)
 
     @staticmethod
     def get_link(date: datetime):
@@ -27,25 +42,10 @@ class GeniusScraper:
     def has_lyrics_class(tag):
         for value in tag.get('class', []):
             if value.startswith(
-                    'Lyrics__Container-sc-1ynbvzw-') or value == 'lyrics' or value == 'lyrics_ctrl.editing' or value == 'song_body-lyrics':
+                    'Lyrics__Container-sc-1ynbvzw-') or value == 'lyrics' \
+                    or value == 'lyrics_ctrl.editing' or value == 'song_body-lyrics':
                 return True
         return False
-
-    @staticmethod
-    def log(filename, page_url):
-        logfile = f"{filename}.txt"
-        timestamp_format = '%Y-%h-%d-%H:%M:%S'
-        now = datetime.now()
-        timestamp = now.strftime(timestamp_format)
-        with open(logfile, "a") as f:
-            f.write(timestamp + ', ' + f'scraping data from the link: {page_url}' + '\n'
-                    )
-
-    @staticmethod
-    def clear_log(filename):
-        logfile = f"{filename}.txt"
-        with open(logfile, "w") as f:
-            pass
 
     @staticmethod
     def setting_connection():
@@ -58,6 +58,7 @@ class GeniusScraper:
         session.mount('https://', adapter)
 
         return session
+
 
     @staticmethod
     def parser_2018(soup, output):
@@ -101,12 +102,11 @@ class GeniusScraper:
     def collect_data(self):
         self.generate_links()
         output = []
-        self.clear_log('logfile')
 
         for link in self.links:
             time.sleep(random.randint(2, 4))
 
-            self.log('logfile', link)
+            self.song_info_logger.info(f'Parsing data from {link}')
 
             r = self.setting_connection().get(link)
             soup = BeautifulSoup(r.content, "html.parser")
@@ -114,13 +114,12 @@ class GeniusScraper:
 
         song_info_df = pd.DataFrame(output)
         song_info_df = song_info_df.explode(['ranks',
-                         'song_titles',
-                         'artists',
-                         'lyrics_links']).reset_index(drop=True)
+                                             'song_titles',
+                                             'artists',
+                                             'lyrics_links']).reset_index(drop=True)
         return song_info_df
 
     def collect_lyrics(self, df):
-        self.clear_log('lyrics_log')
         unique_links = {}
         lyrics_list = []
 
@@ -129,13 +128,13 @@ class GeniusScraper:
             if unique_linkpart in unique_links.values():
                 continue
             else:
+                self.lyrics_logger.info(f'Scraping lyrics from the {lyrics_link}')
                 unique_links[unique_linkpart] = unique_linkpart
-                self.log('lyrics_log', lyrics_link)
                 r = requests.get(lyrics_link)
                 soup = BeautifulSoup(r.content, "html.parser")
                 lyrics = soup.find(self.has_lyrics_class).get_text()
                 lyrics_list.append({"lyrics_links": lyrics_link,
-                                  "lyrics": lyrics})
+                                    "lyrics": lyrics})
                 time.sleep(random.randint(2, 4))
         lyrics_df = pd.DataFrame(lyrics_list)
 
@@ -147,4 +146,4 @@ end_date = datetime(2019, 1, 10)
 scraper = GeniusScraper(start_date, end_date)
 song_info_df = scraper.collect_data()
 lyrics_df = scraper.collect_lyrics(song_info_df)
-pd.merge(song_info_df, lyrics_df, on='lyrics_links')
+# pd.merge(song_info_df, lyrics_df, on='lyrics_links')
