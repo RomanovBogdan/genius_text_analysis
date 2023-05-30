@@ -82,37 +82,53 @@ class GeniusScraper:
         return lyrics_list
 
 
-    def get_element_content(self, soup, tag:str, element_class:str, str_before:str, str_after:str):
-        element_content = soup.find_all(tag, [element_class])
+    def get_element_content(self, soup, tag:str, element_class:list, str_before:str, str_after:str):
+        element_content = soup.find_all(tag, element_class)
         return re.findall(f'(?<={str_before})(.*?)(?={str_after})', str(element_content))
 
 
-    def parse_lyrics(self, soup, output):
-        lyrics_list = []
+    def parse_lyrics(self, soup, output, date):
+        rank, song_name, artist_name, lyrics_links, lyrics_list = [], [], [], [], []
 
-        rank = self.get_element_content(soup, 'div', "chart_row-number_container chart_row-number_container--large",
-                                 '<span\>', '</span>')
-        song_name_3 = self.get_element_content(soup, 'div', "chart_row-two_line_title_and_artist-title",
-                                               '"\>', '</div>')
-        song_name_7 = self.get_element_content(soup, 'div', "chart_row-content",
-                                               '"\>', ' by')
-        artist_name_3 = self.get_element_content(soup, 'div', "chart_row-two_line_title_and_artist",
-                                               '      ', '\n')
-        artist_name_7 = self.get_element_content(soup, 'div', "chart_row-content",
-                                               'by ', '</div>')
-        lyrics_links = self.get_element_content(soup, 'a', 'chart_row', 'href="', '">')
+        if date > datetime(2019, 6, 3):
+            rank = self.get_element_content(soup, "div", ["ChartItemdesktop__Rank-sc-3bmioe-1"],
+                                            '"\>', '</div>')
+            song_name = self.get_element_content(soup, "div", ["ChartSongdesktop__Title-sc-18658hh-3"],
+                                            '"\>', '</div>')
+            artist_name = self.get_element_content(soup, "h4", ["ChartSongdesktop__Artist-sc-18658hh-5"],
+                                            '"\>', '</h4>')
+            lyrics_links = self.get_element_content(soup, "a",
+                                                    ["PageGriddesktop-a6v82w-0 ChartItemdesktop__Row-sc-3bmioe-0 izVEsw",
+                                                     "PageGriddesktop-a6v82w-0 ChartItemdesktop__Row-sc-3bmioe-0 qsIlk"],
+                                                    'href="', '">')
+            for lyrics_link in lyrics_links:
+                lyrics_list = self.collect_lyrics(lyrics_link, lyrics_list)
 
-        for lyrics_link in lyrics_links:
-            lyrics_list = self.collect_lyrics(lyrics_link, lyrics_list)
+        else:
+            rank = self.get_element_content(soup, 'div', ["chart_row-number_container chart_row-number_container--large"],
+                                     '<span\>', '</span>')
+            song_name_3 = self.get_element_content(soup, 'div', ["chart_row-two_line_title_and_artist-title"],
+                                                   '"\>', '</div>')
+            song_name_7 = self.get_element_content(soup, 'div', ["chart_row-content"],
+                                                   '"\>', ' by')
+            song_name = song_name_3 + song_name_7
+            artist_name_3 = self.get_element_content(soup, 'div', ["chart_row-two_line_title_and_artist"],
+                                                   '      ', '\n')
+            artist_name_7 = self.get_element_content(soup, 'div', ["chart_row-content"],
+                                                   'by ', '</div>')
+            artist_name = artist_name_3 + artist_name_7
+            lyrics_links = self.get_element_content(soup, 'a', ['chart_row'], 'href="', '">')
+
+            for lyrics_link in lyrics_links:
+                lyrics_list = self.collect_lyrics(lyrics_link, lyrics_list)
 
         output.append({
             'ranks': rank,
-            'song_titles': song_name_3 + song_name_7,
-            'artists': artist_name_3 + artist_name_7,
+            'song_titles': song_name,
+            'artists': artist_name,
             'lyrics_links': lyrics_links,
             'lyrics': lyrics_list
         })
-
 
     @staticmethod
     def unique_bit(link):
@@ -140,11 +156,7 @@ class GeniusScraper:
             r = self.set_connection().get(link)
             soup = BeautifulSoup(r.content, "html.parser")
 
-            if date > datetime(2019, 6, 3):
-                self.parser_2019(soup, output)
-            else:
-                self.parser_2018(soup, output)
-
+            self.parse_lyrics(soup, output, date)
 
         song_info_df = pd.DataFrame(output)
         song_info_df = song_info_df.explode(['ranks',
@@ -156,7 +168,7 @@ class GeniusScraper:
         return song_info_df
 
 
-start_date = datetime(2018, 1, 1)
-end_date = datetime(2018, 2, 1)
+start_date = datetime(2019, 6, 1)
+end_date = datetime(2019, 6, 10)
 scraper = GeniusScraper(start_date, end_date)
 song_info_df = scraper.collect_data()
