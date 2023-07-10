@@ -1,6 +1,6 @@
 import random
 import pandas as pd
-from time import sleep
+import time
 import re
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
@@ -9,10 +9,18 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from urllib.parse import urlparse
 import json
+import logging
 
 
 class GeniusScraper:
     def __init__(self, config_path: str, start_date: datetime, end_date: datetime):
+        logging.basicConfig(
+            filename='song_parsing.log',
+            filemode='w',
+            format='%(asctime)s: %(levelname)s: %(message)s',
+            datefmt='%m/%d/%Y %I:%M:%S',
+            level=logging.INFO
+        )
         self.config_path = config_path
         self.start_date = start_date
         self.end_date = end_date
@@ -23,28 +31,17 @@ class GeniusScraper:
         self.load_config()
 
 
-
     @staticmethod
     def get_link(date: datetime):
         date_str = date.strftime('%Y%m%d')
         return f"http://web.archive.org/web/{date_str}/https://genius.com/"
 
 
-    @staticmethod
-    def log(filename, message:str, page_url):
-        logfile = f"{filename}.txt"
-        timestamp_format = '%Y-%h-%d-%H:%M:%S'
-        now = datetime.now()
-        timestamp = now.strftime(timestamp_format)
-        with open(logfile, "a") as f:
-            f.write(timestamp + ', ' + f'{message}' + ': ' + f'{page_url}' + '\n')
-
-
-    @staticmethod
-    def clear_log(filename):
-        logfile = f"{filename}.txt"
-        with open(logfile, "w"):
-            pass
+    def log(self, message:str, page_url):
+        if 'song data' in message:
+            logging.warning(f'{message}: {page_url}')
+        else:
+            logging.info(f'{message}: {page_url}')
 
 
     @staticmethod
@@ -61,7 +58,7 @@ class GeniusScraper:
     def set_connection():
         session = requests.Session()
 
-        retry = Retry(connect=3, backoff_factor=0.5)
+        retry = Retry(connect=5, backoff_factor=1)
         adapter = HTTPAdapter(max_retries=retry)
 
         session.mount('http://', adapter)
@@ -75,14 +72,19 @@ class GeniusScraper:
         if unique_linkpart in self.unique_lyrics_links.values():
             lyrics_list.append('We already listened to this one')
         else:
-            self.log('songs_log', 'collecting lyrics', lyrics_link)
+            self.log('collecting lyrics', lyrics_link)
             self.unique_lyrics_links[unique_linkpart] = unique_linkpart
             r = self.set_connection().get(lyrics_link)
             soup = BeautifulSoup(r.content, "html.parser")
 
-            lyrics_list.append(soup.find(self.has_lyrics_class).get_text())
 
-            sleep(random.randint(2, 4))
+            try:
+                lyrics_tag = soup.find(self.has_lyrics_class)
+                lyrics_list.append(lyrics_tag.get_text())
+            except AttributeError:
+                print('No lyrics found')
+                # lyrics_list.append('No lyrics found')
+
         return lyrics_list
 
 
@@ -91,7 +93,7 @@ class GeniusScraper:
         return re.findall(f'(?<={str_before})(.*?)(?={str_after})', str(element_content))
 
 
-    def parse_web_page_old_version(self, soup):
+    def parse_web_page_old_version(self, soup, date):
         rank = self.get_element_content(soup, 'div', ["chart_row-number_container chart_row-number_container--large"],
                                      '<span\>', '</span>')
         song_name_3 = self.get_element_content(soup, 'div', ["chart_row-two_line_title_and_artist-title"],
@@ -109,7 +111,10 @@ class GeniusScraper:
         lyrics_list = []
         for lyrics_link in lyrics_links:
             lyrics_list = self.collect_lyrics(lyrics_link, lyrics_list)
+            time.sleep(random.randint(3, 4))
+
         return {
+            'date': date,
             'ranks': rank,
             'song_titles': song_name,
             'artists': artist_name,
@@ -117,7 +122,7 @@ class GeniusScraper:
             'lyrics': lyrics_list
             }
 
-    def parse_web_page_new_version(self, soup):
+    def parse_web_page_new_version(self, soup, date):
         rank = self.get_element_content(soup, "div", ["ChartItemdesktop__Rank-sc-3bmioe-1"],
                                         '"\>', '</div>')
         song_name = self.get_element_content(soup, "div", ["ChartSongdesktop__Title-sc-18658hh-3"],
@@ -128,11 +133,14 @@ class GeniusScraper:
                                                 ["PageGriddesktop-a6v82w-0 ChartItemdesktop__Row-sc-3bmioe-0 izVEsw",
                                                  "PageGriddesktop-a6v82w-0 ChartItemdesktop__Row-sc-3bmioe-0 qsIlk"],
                                                 'href="', '">')
+
         lyrics_list = []
         for lyrics_link in lyrics_links:
             lyrics_list = self.collect_lyrics(lyrics_link, lyrics_list)
+            time.sleep(random.randint(3, 4))
 
         return {
+            'date': date,
             'ranks': rank,
             'song_titles': song_name,
             'artists': artist_name,
@@ -142,12 +150,10 @@ class GeniusScraper:
 
 
     def parse_lyrics(self, soup, output, date):
-        if date <= datetime(2019, 6, 3):
-            print('Using old version')
-            data = self.parse_web_page_old_version(soup)
+        if date < datetime(2019, 6, 3):
+            data = self.parse_web_page_old_version(soup, date)
         else:
-            print('Using new version')
-            data = self.parse_web_page_new_version(soup)
+            data = self.parse_web_page_new_version(soup, date)
         output = pd.concat([output, pd.DataFrame(data)], ignore_index=True)
         return output
 
@@ -176,33 +182,42 @@ class GeniusScraper:
         self.generate_links()
 
         if self.config['iteration'] != 0:
-            output = pd.read_csv('filename.csv')
+            output = pd.read_csv('filename.csv', index_col=0)
             iteration = self.config['iteration']
         else:
             output = pd.DataFrame()
             iteration = 0
 
-        self.clear_log('songs_log')
+        for date, link in self.dates_links:
 
-        try:
-            for date, link in self.dates_links:
-                sleep(random.randint(2, 4))
+            self.log(f'collecting song data from that date {date.strftime(("%Y-%m-%d"))}', link)
 
-                self.log('songs_log', 'collecting song data', link)
-
+            try:
                 r = self.set_connection().get(link)
+
                 soup = BeautifulSoup(r.content, "html.parser")
 
                 output = self.parse_lyrics(soup, output, date)
-            iteration += 1
+                iteration += 1
 
-        except Exception:
-            self.save_config(iteration)
-            output.to_csv('filename.csv')
-        song_info_df = output[output.lyrics != 'We already listened to this one']
+            except ValueError as e:
+                self.log(f"Error occurred while processing link {link}: {str(e)}", link)
+                iteration += 1
+                continue
+
+            except Exception as e:
+                self.log(f"Unexpected error occurred while processing link {link}: {str(e)}", link)
+                self.save_config(iteration)
+                output.to_csv('filename.csv')
+                break
+
+
+        song_info_df = output[output['lyrics'] != 'We already listened to this one']
         return song_info_df
 
-start_date = datetime(2019, 6, 1)
-end_date = datetime(2019, 6, 5)
+start_date = datetime(2020, 1, 3)
+end_date = datetime(2023, 7, 8)
 scraper = GeniusScraper('./config.json', start_date, end_date)
 song_info_df = scraper.collect_data()
+
+df = pd.read_csv('filename.csv')
