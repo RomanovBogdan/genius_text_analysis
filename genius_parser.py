@@ -111,7 +111,7 @@ class GeniusScraper:
         lyrics_list = []
         for lyrics_link in lyrics_links:
             lyrics_list = self.collect_lyrics(lyrics_link, lyrics_list)
-            time.sleep(random.randint(3, 4))
+            time.sleep(random.randint(1, 3))
 
         return {
             'date': date,
@@ -211,13 +211,18 @@ class GeniusScraper:
                 output.to_csv('filename.csv')
                 break
 
+            except KeyboardInterrupt as e:
+                self.log(f"Unexpected error occurred while processing link {link}: {str(e)}", link)
+                self.save_config(iteration)
+                output.to_csv('filename.csv')
+                break
 
         song_info_df = output[output['lyrics'] != 'We already listened to this one']
         return song_info_df
 
-start_date = datetime(2020, 1, 3)
+start_date = datetime(2018, 1, 1)
 end_date = datetime(2023, 7, 8)
 scraper = GeniusScraper('./config.json', start_date, end_date)
 song_info_df = scraper.collect_data()
 
-df = pd.read_csv('filename.csv')
+df = pd.read_csv('filename.csv', index_col=0)
