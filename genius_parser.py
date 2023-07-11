@@ -131,7 +131,9 @@ class GeniusScraper:
                                                '"\>', '</h4>')
         lyrics_links = self.get_element_content(soup, "a",
                                                 ["PageGriddesktop-a6v82w-0 ChartItemdesktop__Row-sc-3bmioe-0 izVEsw",
-                                                 "PageGriddesktop-a6v82w-0 ChartItemdesktop__Row-sc-3bmioe-0 qsIlk"],
+                                                 "PageGriddesktop-a6v82w-0 ChartItemdesktop__Row-sc-3bmioe-0 qsIlk",
+                                                 'PageGriddesktop-hg04e9-0 ChartItemdesktop__Row-sc-3bmioe-0 qsIlk'
+                                                 ],
                                                 'href="', '">')
 
         lyrics_list = []
@@ -199,6 +201,8 @@ class GeniusScraper:
 
                 output = self.parse_lyrics(soup, output, date)
                 iteration += 1
+                self.save_config(iteration)
+                output.to_csv('filename.csv')
 
             except ValueError as e:
                 self.log(f"Error occurred while processing link {link}: {str(e)}", link)
@@ -220,9 +224,6 @@ class GeniusScraper:
         song_info_df = output[output['lyrics'] != 'We already listened to this one']
         return song_info_df
 
-start_date = datetime(2018, 1, 1)
-end_date = datetime(2023, 7, 8)
-scraper = GeniusScraper('./config.json', start_date, end_date)
-song_info_df = scraper.collect_data()
-
-df = pd.read_csv('filename.csv', index_col=0)
+def genius_parser(start_date, end_date=datetime.now()):
+    scraper = GeniusScraper('./config.json', start_date, end_date)
+    return scraper.collect_data()
