@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 import json
 import logging
 
+OUTPUT_FILE_NAME = 'filename.csv'
 
 class GeniusScraper:
     def __init__(self, config_path: str, start_date: datetime, end_date: datetime):
@@ -184,7 +185,7 @@ class GeniusScraper:
         self.generate_links()
 
         if self.config['iteration'] != 0:
-            output = pd.read_csv('filename.csv', index_col=0)
+            output = pd.read_csv(OUTPUT_FILE_NAME, index_col=0)
             iteration = self.config['iteration']
         else:
             output = pd.DataFrame()
@@ -202,7 +203,7 @@ class GeniusScraper:
                 output = self.parse_lyrics(soup, output, date)
                 iteration += 1
                 self.save_config(iteration)
-                output.to_csv('filename.csv')
+                output.to_csv(OUTPUT_FILE_NAME)
 
             except ValueError as e:
                 self.log(f"Error occurred while processing link {link}: {str(e)}", link)
@@ -212,13 +213,13 @@ class GeniusScraper:
             except Exception as e:
                 self.log(f"Unexpected error occurred while processing link {link}: {str(e)}", link)
                 self.save_config(iteration)
-                output.to_csv('filename.csv')
+                output.to_csv(OUTPUT_FILE_NAME)
                 break
 
             except KeyboardInterrupt as e:
                 self.log(f"Unexpected error occurred while processing link {link}: {str(e)}", link)
                 self.save_config(iteration)
-                output.to_csv('filename.csv')
+                output.to_csv(OUTPUT_FILE_NAME)
                 break
 
         song_info_df = output[output['lyrics'] != 'We already listened to this one']
