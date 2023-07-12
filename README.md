@@ -15,8 +15,25 @@ The main objective of this project is to create a dataset for Natural Language P
 
 Nothing fancy:
 - Python 3
-- Libraries: requests, beautifulsoup4, pandas
+- Libraries: requests, beautifulsoup4, pandas, urllib3
 - Stable internet connection
+
+
+### Installation
+
+1. Clone the repo:
+```git clone https://github.com/your_username_/project_name.git```
+
+
+### Usage
+Update the timeframe for which you want to collect the song lyrics. 
+
+To run the web scraper, use the command:
+
+```python scraper.py```
+
+The output will be saved in a CSV file named filename.csv in the same directory. Also, all errors will be caught and added to the logs. 
+
 
 ## Contact
 Your Name - romanovbogdan4@gmail.com
