@@ -21,7 +21,7 @@ Nothing fancy:
 
 ### Installation
 
-1. Clone the repo:
+Clone the repo:
 ```git clone https://github.com/your_username_/project_name.git```
 
 
