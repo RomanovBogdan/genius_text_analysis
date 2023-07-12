@@ -36,6 +36,7 @@ The output will be saved in a CSV file named filename.csv in the same directory.
 
 
 ## Contact
-Your Name - romanovbogdan4@gmail.com
+Email - romanovbogdan4@gmail.com
+Other contacts are in profile description.
 
 Project Link: https://github.com/RomanovBogdan/genius_text_analysis
